@@ -1,4 +1,4 @@
-﻿#region
+#region
 
 using System;
 using System.Drawing;
@@ -15,7 +15,7 @@ namespace Marksman
         public Spell R;
         public Spell W;
 
-
+        public static Items.Item Dfg = new Items.Item(3128, 750);
         public Ezreal()
         {
             Utils.PrintMessage("Ezreal loaded.");
@@ -63,6 +63,16 @@ namespace Marksman
         public override void Game_OnGameUpdate(EventArgs args)
         {
             Obj_AI_Hero t;
+
+            if (Q.IsReady() &&  GetValue<KeyBind>("UseQTH").Active)
+            {
+                if(ObjectManager.Player.HasBuff("Recall"))
+                    return;
+                t = SimpleTs.GetTarget(Q.Range, SimpleTs.DamageType.Physical);
+                if (t != null)
+                    Q.Cast(t);
+            }
+
             if (ComboActive || HarassActive)
             {
                 var useQ = GetValue<bool>("UseQ" + (ComboActive ? "C" : "H"));
@@ -70,6 +80,12 @@ namespace Marksman
 
                 if (Orbwalking.CanMove(100))
                 {
+                    if (Dfg.IsReady())
+                    {
+                        t = SimpleTs.GetTarget(W.Range, SimpleTs.DamageType.Magical);
+                        Dfg.Cast(t);
+                    }
+
                     if (Q.IsReady() && useQ)
                     {
                         t = SimpleTs.GetTarget(Q.Range, SimpleTs.DamageType.Physical);
@@ -103,6 +119,9 @@ namespace Marksman
         {
             config.AddItem(new MenuItem("UseQH" + Id, "Use Q").SetValue(true));
             config.AddItem(new MenuItem("UseWH" + Id, "Use W").SetValue(true));
+            config.AddItem(
+                new MenuItem("UseQTH" + Id, "Use Q (Toggle)").SetValue(new KeyBind("H".ToCharArray()[0],
+                    KeyBindType.Toggle)));
             return true;
         }
 
@@ -122,5 +141,12 @@ namespace Marksman
                 new MenuItem("DrawW" + Id, "W range").SetValue(new Circle(false, Color.FromArgb(100, 255, 255, 255))));
             return true;
         }
+
+        public override bool ExtrasMenu(Menu config)
+        {
+
+            return true;
+        }
+
     }
 }

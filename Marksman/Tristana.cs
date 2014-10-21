@@ -1,11 +1,9 @@
 #region
-
 using System;
 using System.Drawing;
 using System.Linq;
 using LeagueSharp;
 using LeagueSharp.Common;
-
 #endregion
 
 namespace Marksman
@@ -15,6 +13,8 @@ namespace Marksman
         public Spell E;
         public Spell Q;
         public Spell R;
+
+        public static Items.Item Dfg = new Items.Item(3128, 750);
 
         public Tristana()
         {
@@ -68,17 +68,38 @@ namespace Marksman
 
         public override void Game_OnGameUpdate(EventArgs args)
         {
-            //Update E and R range depending on level; 590 + 9 Ã— ( Tristana's level - 1)
-            E.Range = 590 + 9 * (ObjectManager.Player.Level - 1);
-            R.Range = 590 + 9 * (ObjectManager.Player.Level - 1);
-            if (Orbwalking.CanMove(100) && (ComboActive || HarassActive))
+            if (!Orbwalking.CanMove(100)) return;
+            
+            //Update Q range depending on level; 600 + 5 Ã— ( Tristana's level - 1)/* dont waste your Q for only 1 or 2 hits. */
+            //Update E and R range depending on level; 630 + 9 Ã— ( Tristana's level - 1)
+            Q.Range = 600 + 5 * (ObjectManager.Player.Level - 1);
+            E.Range = 630 + 9 * (ObjectManager.Player.Level - 1);
+            R.Range = 630 + 9 * (ObjectManager.Player.Level - 1);
+
+            if (GetValue<KeyBind>("UseETH").Active)
+            {
+                 if(ObjectManager.Player.HasBuff("Recall"))
+                    return;
+                var eTarget = SimpleTs.GetTarget(E.Range, SimpleTs.DamageType.Physical);
+                if (E.IsReady() && eTarget.IsValidTarget())
+                    E.CastOnUnit(eTarget);
+            }
+
+            if (ComboActive || HarassActive)
             {
                 var useE = GetValue<bool>("UseE" + (ComboActive ? "C" : "H"));
+
                 if (useE)
                 {
                     var eTarget = SimpleTs.GetTarget(E.Range, SimpleTs.DamageType.Physical);
                     if (E.IsReady() && eTarget.IsValidTarget())
                         E.CastOnUnit(eTarget);
+                }
+
+                if (Dfg.IsReady())
+                {
+                    var eTarget = SimpleTs.GetTarget(E.Range, SimpleTs.DamageType.Magical);
+                    Dfg.Cast(eTarget);
                 }
             }
 
@@ -90,7 +111,7 @@ namespace Marksman
                         .Where(
                             hero =>
                                 hero.IsValidTarget(R.Range) &&
-                                ObjectManager.Player.GetSpellDamage(hero, SpellSlot.R) - 20 > hero.Health))
+                                ObjectManager.Player.GetSpellDamage(hero, SpellSlot.R) - 50 > hero.Health))
                 R.CastOnUnit(hero);
         }
 
@@ -105,6 +126,9 @@ namespace Marksman
         {
             config.AddItem(new MenuItem("UseQH" + Id, "Use Q").SetValue(false));
             config.AddItem(new MenuItem("UseEH" + Id, "Use E").SetValue(true));
+            config.AddItem(
+                new MenuItem("UseETH" + Id, "Use E (Toggle)").SetValue(new KeyBind("H".ToCharArray()[0],
+                    KeyBindType.Toggle)));
             return true;
         }
 
@@ -113,7 +137,6 @@ namespace Marksman
             config.AddItem(
                 new MenuItem("DrawE" + Id, "E range").SetValue(new Circle(true, Color.CornflowerBlue)));
             return true;
-
         }
 
         public override bool MiscMenu(Menu config)
@@ -123,5 +146,12 @@ namespace Marksman
             config.AddItem(new MenuItem("UseRMI" + Id, "Use R Interrupt").SetValue(true));
             return true;
         }
+
+        public override bool ExtrasMenu(Menu config)
+        {
+
+            return true;
+        }
+
     }
 }

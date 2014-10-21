@@ -1,10 +1,8 @@
-﻿#region
-
+#region
 using System;
 using System.Linq;
 using LeagueSharp;
 using LeagueSharp.Common;
-
 #endregion
 
 namespace Marksman
@@ -12,8 +10,9 @@ namespace Marksman
     internal class Program
     {
         public static Menu Config;
+        public static Menu QuickSilverMenu;
         public static Champion CClass;
-
+        public static Activator AActivator;
         private static void Main(string[] args)
         {
             CustomEvents.Game.OnGameLoad += Game_OnGameLoad;
@@ -23,6 +22,8 @@ namespace Marksman
         {
             Config = new Menu("Marksman", "Marksman", true);
             CClass = new Champion();
+            AActivator = new Activator();
+            
             var BaseType = CClass.GetType();
 
             /* Update this with Activator.CreateInstance or Invoke
@@ -60,6 +61,9 @@ namespace Marksman
                 case "lucian":
                     CClass = new Lucian();
                     break;
+                case "missfortune":
+                    CClass = new MissFortune();
+                    break;   
                 case "quinn":
                     CClass = new Quinn();
                     break;
@@ -97,9 +101,26 @@ namespace Marksman
             var items = Config.AddSubMenu(new Menu("Items", "Items"));
             items.AddItem(new MenuItem("BOTRK", "BOTRK").SetValue(true));
             items.AddItem(new MenuItem("GHOSTBLADE", "Ghostblade").SetValue(true));
+            QuickSilverMenu = new Menu("Quick Silver Sash", "QuickSilverSash");
+            items.AddSubMenu(QuickSilverMenu);
+            QuickSilverMenu.AddItem(new MenuItem("AnyStun", "Any Stun").SetValue(true));
+            QuickSilverMenu.AddItem(new MenuItem("AnySnare", "Any Snare").SetValue(true));
+            QuickSilverMenu.AddItem(new MenuItem("AnyTaunt", "Any Taunt").SetValue(true));
+            foreach (var t in AActivator.BuffList)
+            {
+                foreach (var enemy in ObjectManager.Get<Obj_AI_Hero>().Where(enemy => enemy.IsEnemy))
+                {
+                    if (t.ChampionName == enemy.ChampionName)
+                        QuickSilverMenu.AddItem(new MenuItem(t.BuffName, t.DisplayName).SetValue(t.DefaultValue));
+                }
+            }
             items.AddItem(
                 new MenuItem("UseItemsMode", "Use items on").SetValue(
                     new StringList(new[] {"No", "Mixed mode", "Combo mode", "Both"}, 2)));
+
+            
+            //var Extras = Config.AddSubMenu(new Menu("Extras", "Extras"));
+            //new PotionManager(Extras);
 
             // If Champion is supported draw the extra menus
             if (BaseType != CClass.GetType())
@@ -113,6 +134,7 @@ namespace Marksman
                 var harass = new Menu("Harass", "Harass");
                 if (CClass.HarassMenu(harass))
                 {
+                    harass.AddItem(new MenuItem("HarassMana", "Min. Mana Percent").SetValue(new Slider(50, 100, 0)));
                     Config.AddSubMenu(harass);
                 }
 
@@ -126,6 +148,13 @@ namespace Marksman
                 if (CClass.MiscMenu(misc))
                 {
                     Config.AddSubMenu(misc);
+                }
+
+                var extras = new Menu("Extras", "Extras");
+                if (CClass.ExtrasMenu(extras))
+                {
+                    new PotionManager(extras);
+                    Config.AddSubMenu(extras);
                 }
 
                 var drawing = new Menu("Drawings", "Drawings");
@@ -166,9 +195,14 @@ namespace Marksman
 
         private static void Game_OnGameUpdate(EventArgs args)
         {
+            CheckChampionBuff();
             //Update the combo and harass values.
             CClass.ComboActive = CClass.Config.Item("Orbwalk").GetValue<KeyBind>().Active;
-            CClass.HarassActive = CClass.Config.Item("Farm").GetValue<KeyBind>().Active;
+            
+            var existsMana = ObjectManager.Player.MaxMana/100*Config.Item("HarassMana").GetValue<Slider>().Value;
+            CClass.HarassActive = CClass.Config.Item("Farm").GetValue<KeyBind>().Active &&
+                                  ObjectManager.Player.Mana >= existsMana;
+                                  
             CClass.LaneClearActive = CClass.Config.Item("LaneClear").GetValue<KeyBind>().Active;
             CClass.Game_OnGameUpdate(args);
 
@@ -208,6 +242,46 @@ namespace Marksman
             if (ghostblade && target != null && target.Type == ObjectManager.Player.Type &&
                 Orbwalking.InAutoAttackRange(target))
                 Items.UseItem(3142);
+        }
+        
+        private static void CheckChampionBuff()
+        {
+            foreach (var t1 in ObjectManager.Player.Buffs)
+            {
+                foreach (var t in QuickSilverMenu.Items)
+                {
+                    if (QuickSilverMenu.Item(t.Name).GetValue<bool>())
+                    {
+                        {
+                            if (t1.Name.ToLower().Contains(t.Name.ToLower()))
+                            {
+                                if (Items.HasItem(3139)) Items.UseItem(3139); 
+                                if (Items.HasItem(3140)) Items.UseItem(3140);
+                            }
+                        }
+                    }
+
+                    if (QuickSilverMenu.Item("AnySnare").GetValue<bool>() &&
+                        ObjectManager.Player.HasBuffOfType(BuffType.Snare))
+                    {
+                        if (Items.HasItem(3139)) Items.UseItem(3139);
+                        if (Items.HasItem(3140)) Items.UseItem(3140);
+                    }
+                    if (QuickSilverMenu.Item("AnyStun").GetValue<bool>() &&
+                        ObjectManager.Player.HasBuffOfType(BuffType.Stun))
+                    {
+                        if (Items.HasItem(3139)) Items.UseItem(3139);
+                        if (Items.HasItem(3140)) Items.UseItem(3140);
+                    }
+                    if (QuickSilverMenu.Item("AnyTaunt").GetValue<bool>() &&
+                        ObjectManager.Player.HasBuffOfType(BuffType.Taunt))
+                    {
+                        if (Items.HasItem(3139)) Items.UseItem(3139);
+                        if (Items.HasItem(3140)) Items.UseItem(3140);
+                    }
+
+                }
+            }
         }
 
         private static void Orbwalking_AfterAttack(Obj_AI_Base unit, Obj_AI_Base target)
